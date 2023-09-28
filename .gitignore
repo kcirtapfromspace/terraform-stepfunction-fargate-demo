@@ -1,0 +1,21 @@
+# terraform infra
+.terraform
+**/terraform.tfstate
+**/terraform.tfstate.backup
+**/.terraform.tfstate.lock.info
+
+# dbt
+target/
+dbt_modules/
+logs/
+
+# artifacts
+*.zip
+utils/lambda_layer_python_3.7/python
+
+# docker volumes
+postgres_data/
+
+# local env files
+.env
+
