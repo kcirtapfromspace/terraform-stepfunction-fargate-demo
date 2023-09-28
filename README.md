@@ -19,5 +19,3 @@ The Terraform script will perform the following actions:
   - execute, monitor and retry execution of the task in Fargate
   - notify an SNS topic should execution of the task fail
 - Create an Amazon EventBridge rule to execute the Step Function on a defined schedule
-
-
