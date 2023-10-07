@@ -8,6 +8,24 @@ resource "aws_vpc" "vpc" {
     "Project" = var.project
     "Name"    = "${var.project}-vpc"
   }
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  depends_on = [
+    aws_cloudwatch_log_group.vpc_flow_logs
+  ]
+
+}
+
+resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
+  name = "${var.project}-vpc-flow-logs"
+
+  tags = {
+    "Project" = var.project
+    "Name"    = "${var.project}-vpc-flow-logs"
+  }
 }
 
 resource "aws_internet_gateway" "igw" {

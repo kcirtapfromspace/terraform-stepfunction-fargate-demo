@@ -13,12 +13,21 @@ resource "aws_kms_alias" "alias" {
 
 resource "aws_kms_key_policy" "project_key" {
     key_id = aws_kms_key.project_key.key_id
-    policy = jsondecode(
+    policy = jsonencode({
+        Id = "example"
+        Statement = [
         {
-            "Version": "2012-10-17",
-            "Id": "key-default-1",
-            
-        }
-    )
-  
-}
+            Action = "kms:*"
+            Effect = "Allow"
+            Principal = {
+            AWS = "*"
+            }
+
+            Resource = "*"
+            Sid      = "Enable IAM User Permissions"
+        },
+        ]
+        Version = "2012-10-17"
+    })
+    }
+

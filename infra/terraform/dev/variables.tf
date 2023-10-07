@@ -16,8 +16,14 @@ variable "environment" {
 
 }
 
-variable "vpc_id" {
-  description = "the vpc id"
-  type        = string
+# variable "vpc_id" {
+#   description = "the vpc id"
+#   type        = string
 
-}
+# }
+
+
+# variable "redshift_subnets" {
+#   description = "list of subnet ids to be used with redshift"
+#   type        = list(any)
+# }

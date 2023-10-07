@@ -4,7 +4,7 @@ resource "aws_security_group" "redshift_serverless" {
   # name = "${local.prefix}-redshift-serverless"
   description = "Allow incoming traffic to redshift"
   # description = "${local.prefix}-redshift-serverless"
-  vpc_id = var.vpc_id
+  vpc_id = aws_vpc.vpc.id
 }
 
 resource "aws_vpc_security_group_ingress_rule" "redshift_cluster_port" {
@@ -78,17 +78,10 @@ resource "aws_iam_policy" "redshift_serverless" {
   policy = templatefile(
     "${path.module}/policy/s3_policy.json.tpl",
     {
-      data_bucket    = module.data_bucket.bucket_id
-      raw_bucket     = module.raw_bucket.bucket_id
-      staging_bucket = module.staging_bucket.bucket_id
-      curated_bucket = module.curated_bucket.bucket_id
-      #   partition                 = data.aws_partition.current.partition
-      #   region                    = data.aws_region.current.name
-      #   account_id                = data.aws_caller_identity.current.account_id,
-      #   secretsmanager_secret_arn = aws_secretsmanager_secret.sfmc.arn,
-      #   log_group_id              = resource.aws_cloudwatch_log_group.sfmc.id,
-      #   dead_letter_queue         = aws_sqs_queue.lambda_deadletter.arn
-      #   kms_key_arn               = aws_kms_key.project.arn
+      data_bucket    = module.data_bucket.s3_bucket_id
+      raw_bucket     = module.raw_bucket.s3_bucket_id
+      staging_bucket = module.staging_bucket.s3_bucket_id
+      curated_bucket = module.curated_bucket.s3_bucket_id
     }
   )
 }
@@ -114,6 +107,13 @@ resource "aws_secretsmanager_secret_version" "redshift_jdbc_creds" {
     ]
   }
 }
+data "aws_secretsmanager_secret_version" "redshift_jdbc_creds" {
+  secret_id = aws_secretsmanager_secret.redshift_jdbc_creds.id
+}
+
+data "aws_secretsmanager_secret" "redshift_jdbc_creds" {
+  arn = aws_secretsmanager_secret.redshift_jdbc_creds.arn
+}
 
 ################################
 ## Redshift Serverless - Main ##
@@ -121,15 +121,16 @@ resource "aws_secretsmanager_secret_version" "redshift_jdbc_creds" {
 
 # Create the Redshift Serverless Namespace
 resource "aws_redshiftserverless_namespace" "serverless" {
-  namespace_name      = var.redshift_serverless_namespace_name
-  db_name             = var.redshift_serverless_database_name
-  admin_username      = var.redshift_serverless_admin_username
-  admin_user_password = var.redshift_serverless_admin_password
-  iam_roles           = [aws_iam_role.redshift-serverless-role.arn]
+  namespace_name      = "${local.prefix}-namespace"
+  db_name             ="${local.prefix}-database"
+  admin_username      = jsondecode(data.aws_secretsmanager_secret_version.redshift_jdbc_creds.secret_string)["username"]
+  admin_user_password =  jsondecode(data.aws_secretsmanager_secret_version.redshift_jdbc_creds.secret_string)["password"]
+
+  iam_roles           = [aws_iam_role.redshift_serverless.arn]
 
   tags = {
-    Name        = var.redshift_serverless_namespace_name
-    Environment = var.app_environment
+    Name        = "${local.prefix}-namespace"
+    Environment = var.environment
   }
 }
 
@@ -137,22 +138,23 @@ resource "aws_redshiftserverless_namespace" "serverless" {
 
 # Create the Redshift Serverless Workgroup
 resource "aws_redshiftserverless_workgroup" "serverless" {
-  depends_on = [aws_redshiftserverless_namespace.serverless]
-
+  depends_on = [aws_redshiftserverless_namespace.serverless, aws_vpc.vpc]
+  base_capacity = 8
   namespace_name = aws_redshiftserverless_namespace.serverless.id
-  workgroup_name = var.redshift_serverless_workgroup_name
-  base_capacity  = var.redshift_serverless_base_capacity
+  workgroup_name = "${local.prefix}-workgroup"
   
-  security_group_ids = [ aws_security_group.redshift-serverless-security-group.id ]
-  subnet_ids         = [ 
-    aws_subnet.redshift-serverless-subnet-az1.id,
-    aws_subnet.redshift-serverless-subnet-az2.id,
-    aws_subnet.redshift-serverless-subnet-az3.id,
-  ]
+  security_group_ids = [ aws_security_group.redshift_serverless.id ]
+  
+  # Use all the subnet ids from aws_subnet.public for this single resource
+  subnet_ids = [for subnet in aws_subnet.public : subnet.id]
   publicly_accessible = var.redshift_serverless_publicly_accessible
   
   tags = {
-    Name        = var.redshift_serverless_workgroup_name
-    Environment = var.app_environment
+    Name        = "${local.prefix}-workgroup"
+    Environment = var.environment
   }
+}
+
+output "endpoint_structure" {
+  value = aws_redshiftserverless_workgroup.serverless.endpoint
 }

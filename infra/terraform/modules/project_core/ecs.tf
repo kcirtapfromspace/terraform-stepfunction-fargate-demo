@@ -1,58 +1,3 @@
-resource "aws_ecr_repository" "docker_repository" {
-  name = "${var.project}"
-}
-
-resource "aws_ecr_lifecycle_policy" "docker_repository_lifecycly" {
-  repository = "${aws_ecr_repository.docker_repository.name}"
-
-  policy = <<EOF
-{
-    "rules": [
-        {
-            "rulePriority": 1,
-            "description": "Keep only the latest 5 images",
-            "selection": {
-                "tagStatus": "any",
-                "countType": "imageCountMoreThan",
-                "countNumber": 5
-            },
-            "action": {
-                "type": "expire"
-            }
-        }
-    ]
-}
-EOF
-}
-resource "aws_ecr_repository" "docker_repository" {
-  name = var.project
-  image_tag_mutability = "IMMUTABLE"
-  image_scanning_configuration {
-    scan_on_push = true
-  }
-}
-
-resource "aws_ecr_lifecycle_policy" "docker_repository_lifecycly" {
-  repository = aws_ecr_repository.docker_repository.name
-
-  policy = jsonencode({
-    rules = [
-      {
-        rulePriority = 1
-        description  = "Keep only the latest 5 images"
-        selection = {
-          tagStatus   = "any"
-          countType   = "imageCountMoreThan"
-          countNumber = 5
-        }
-        action = {
-          type = "expire"
-        }
-      }
-    ]
-  })
-}
-
 resource "aws_ecs_cluster" "ecs_cluster" {
   name = var.project
 }
@@ -118,8 +63,8 @@ locals {
     image              = aws_ecr_repository.docker_repository.repository_url
     image_version      = "latest"
     essential          = true
-    db_host            = var.db_host
-    db_port            = var.db_port
+    db_host = aws_redshiftserverless_workgroup.serverless.endpoint[0].address
+    db_port            = aws_redshiftserverless_workgroup.serverless.endpoint[0].port
     db_role            = var.db_role
     db_type            = var.db_type
     db_user            = var.master_username
@@ -132,7 +77,8 @@ locals {
 }
 
 resource "aws_ecs_task_definition" "dbt_task_definition" {
-  family                   = "${var.project}-task"
+    depends_on = [aws_redshiftserverless_namespace.serverless]
+  family                   = "${var.project}-task-definition"
   network_mode             = "awsvpc"
   execution_role_arn       = aws_iam_role.ecs_task_iam_role.arn
   requires_compatibilities = ["FARGATE"]
